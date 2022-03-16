@@ -310,7 +310,7 @@ class Sentinel2Loader:
                     except Exception as exp:
                         logger.warning('Could not filter minimum visible land using SCL band. dateRef=%s err=%s' % (dateRefStr, exp))
 
-                if bandOrIndexName in ['NDVI', 'NDWI', 'NDWI_MacFeeters', 'NDMI']:
+                if bandOrIndexName in ['NDVI', 'NDWI', 'NDWI_MacFeeters', 'NDMI',"SAVI","EVI","NDI45"]:
                     regionFile = self.getRegionIndex(geoPolygon, bandOrIndexName, resolution, dateRefStr)
                 else:
                     regionFile = self.getRegionBand(geoPolygon, bandOrIndexName, resolution, dateRefStr)
@@ -387,6 +387,46 @@ class Sentinel2Loader:
             saveGeoTiff(ndvi, tmp_file, geoTransform, projection)
             return tmp_file
 
+        elif indexName=='SAVI':
+            l = 0.428
+            #get band 04
+            red,geoTransform,projection = self._getBandDataFloat(geoPolygon, 'B04', resolution, dateReference)
+            #get band 08
+            nir,_,_ = self._getBandDataFloat(geoPolygon, self.nirBand, resolution, dateReference)
+            #calculate savi
+            savi = ((nir - red)/(nir + red + l)) * (1+l)
+            #save file
+            tmp_file = "%s/tmp/savi-%s.tiff" % (self.dataPath, uuid.uuid4().hex)
+            saveGeoTiff(savi, tmp_file, geoTransform, projection)
+            return tmp_file
+
+        elif indexName=='NDI45':
+            #get band 04
+            b04,geoTransform,projection = self._getBandDataFloat(geoPolygon, 'B04', resolution, dateReference)
+            #get band 05
+            b05,_,_ = self._getBandDataFloat(geoPolygon, "B05", resolution, dateReference)
+            #calculate ndi45
+            ndi45 = ((b05 - b04)/(b05 + b04))
+            #save file
+            tmp_file = "%s/tmp/ndi45-%s.tiff" % (self.dataPath, uuid.uuid4().hex)
+            saveGeoTiff(ndi45, tmp_file, geoTransform, projection)
+            return tmp_file
+
+        elif indexName=='EVI':
+            #get band 04
+            b04,geoTransform,projection = self._getBandDataFloat(geoPolygon, 'B04', resolution, dateReference)
+            #get band 08
+            b08,_,_ = self._getBandDataFloat(geoPolygon, "B08", resolution, dateReference)
+            #get band 02
+            b02,_,_ = self._getBandDataFloat(geoPolygon, "B02", resolution, dateReference)
+            #calculate ndvi
+            evi = 2.5 * ((b08 - b04)/(b08 + 6. * b04 - 7.5 * b02 + 1.))
+            #save file
+            tmp_file = "%s/tmp/evi-%s.tiff" % (self.dataPath, uuid.uuid4().hex)
+            saveGeoTiff(evi, tmp_file, geoTransform, projection)
+            return tmp_file
+
+
         elif indexName=='NDWI':
             #get band 08
             b08,geoTransform,projection = self._getBandDataFloat(geoPolygon, self.nirBand, resolution, dateReference)
@@ -423,25 +463,8 @@ class Sentinel2Loader:
             saveGeoTiff(ndmi, tmp_file, geoTransform, projection)
             return tmp_file
         
-        elif indexName=='EVI':
-            #https://github.com/sentinel-hub/custom-scripts/tree/master/sentinel-2
-            # index = 2.5 * (B08 - B04) / ((B08 + 6.0 * B04 - 7.5 * B02) + 1.0)
-            
-            #get band 04
-            b04,geoTransform,projection = self._getBandDataFloat(geoPolygon, 'B04', resolution, dateReference)
-            #get band 08
-            b08,_,_ = self._getBandDataFloat(geoPolygon, self.nirBand, resolution, dateReference)
-            #get band 02
-            b02,_,_ = self._getBandDataFloat(geoPolygon, 'B02', resolution, dateReference)
-            #calculate
-            evi = 2.5 * (b08 - b04) / ((b08 + (6.0 * b04) - (7.5 * b02)) + 1.0)
-            #save file
-            tmp_file = "%s/tmp/ndmi-%s.tiff" % (self.dataPath, uuid.uuid4().hex)
-            saveGeoTiff(evi, tmp_file, geoTransform, projection)
-            return tmp_file
-
         else:
-            raise Exception('\'indexName\' must be NDVI, NDWI, NDWI_MacFeeters, or NDMI')
+            raise Exception('\'indexName\' must be NDVI, NDWI, NDWI_MacFeeters, SAVI, EVI, NDI45 or NDMI')
 
     def cleanupCache(self, filesNotUsedDays):
         os.system("find %s -type f -name '*' -mtime +%s -exec rm {} \;" % (self.dataPath, filesNotUsedDays))
